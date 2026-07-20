@@ -55,25 +55,26 @@
 ---
 
 ## Architecture
-┌─────────────┐ ┌─────────────────┐ ┌──────────────────┐
-│ Alert Source│─────>│ Alert Loader │─────>│ Alert Table (GUI)│
-│ (CSV/JSON/ │ │ (data/.py) │ │ (gui/.py) │
-│ Splunk) │ └─────────────────┘ └────────┬─────────┘
-└─────────────┘ │
-▼
-┌─────────────────┐ ┌──────────────────┐
-│ Enrichment │<──────────── Background ──│ Triage Actions │
-│ Modules │ Threads │ (notes, status) │
-│ (enrichment/.py)│ └──────────────────┘
-└────────┬────────┘
-│
-▼
-┌─────────────────┐ ┌───────────────────────┐
-│ Risk Scorer │─────>│ Report Generator │
-│ (utils/risk_) │ │ (reporting/*.py) │
-└─────────────────┘ └───────────────────────┘
 
-text
+```
+┌─────────────┐     ┌─────────────────┐     ┌──────────────────┐
+│ Alert Source│─────>│ Alert Loader    │─────>│ Alert Table (GUI)│
+│ (CSV/JSON/  │     │ (data/*.py)     │     │ (gui/*.py)       │
+│ Splunk)     │     └─────────────────┘     └────────┬─────────┘
+└─────────────┘                                      │
+                                                     ▼
+                              ┌─────────────────┐     ┌──────────────────┐
+                              │ Enrichment      │<────│ Background       │
+                              │ Modules         │     │ Threads          │
+                              │ (enrichment/*.py)│     └──────────────────┘
+                              └────────┬────────┘
+                                       │
+                                       ▼
+                              ┌─────────────────┐     ┌───────────────────────┐
+                              │ Risk Scorer     │─────>│ Report Generator     │
+                              │ (utils/risk_*)  │     │ (reporting/*.py)     │
+                              └─────────────────┘     └───────────────────────┘
+```
 
 ---
 
@@ -94,28 +95,37 @@ text
    ```bash
    git clone https://github.com/yourusername/soc_triage_tool.git
    cd soc_triage_tool
-Create a virtual environment (recommended):
+   ```
 
-bash
-python -m venv venv
-source venv/bin/activate   # Linux/macOS
-venv\Scripts\activate      # Windows
-Install dependencies:
+2. **Create a virtual environment (recommended):**
 
-bash
-pip install -r requirements.txt
-Set up configuration:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate   # Linux/macOS
+   venv\Scripts\activate      # Windows
+   ```
 
-Copy the sample configuration file and fill in your API keys.
+3. **Install dependencies:**
 
-bash
-cp config.ini.example config.ini
-Edit config.ini with your VirusTotal and AbuseIPDB API keys. The IP Geolocation enricher (ip-api.com) works without any key.
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Configuration
-All settings are stored in config.ini. An example file looks like this:
+4. **Set up configuration:**
 
-ini
+   Copy the sample configuration file and fill in your API keys.
+
+   ```bash
+   cp config.ini.example config.ini
+   ```
+
+   Edit `config.ini` with your VirusTotal and AbuseIPDB API keys. The IP Geolocation enricher (`ip-api.com`) works without any key.
+
+### Configuration
+
+All settings are stored in `config.ini`. An example file looks like this:
+
+```ini
 [API_KEYS]
 virustotal = your_virustotal_api_key
 abuseipdb = your_abuseipdb_api_key
@@ -132,59 +142,64 @@ host = localhost
 port = 8089
 username = admin
 password = your_splunk_password
-You can also manage API keys through the GUI via Settings → API Keys.
+```
 
-Usage
-Run the application:
+You can also manage API keys through the GUI via **Settings → API Keys**.
 
-bash
+---
+
+## Usage
+
+### Run the application
+
+```bash
 python main.py
-Loading Alerts
-Click the Load Data button in the toolbar.
+```
 
-Select the data source:
+### Loading Alerts
 
-CSV File – browse and select a .csv file (a sample is provided in samples/sample_alerts.csv)
+1. Click the **Load Data** button in the toolbar.
+2. Select the data source:
+   - **CSV File** – browse and select a `.csv` file (a sample is provided in `samples/sample_alerts.csv`)
+   - **JSON File** – select a `.json` file with alert data
+   - **Splunk Query** – (if enabled) enter a Splunk saved search name and time range
+3. Alerts will appear in the central table.
 
-JSON File – select a .json file with alert data
+### Performing Enrichment
 
-Splunk Query – (if enabled) enter a Splunk saved search name and time range
-
-Alerts will appear in the central table.
-
-Performing Enrichment
-Click Enrich All to enrich every visible alert (runs in background threads).
-
-Select one or multiple alerts and click Enrich Selected.
-
-Enrichment progress is shown in the status bar.
+- Click **Enrich All** to enrich every visible alert (runs in background threads).
+- Select one or multiple alerts and click **Enrich Selected**.
+- Enrichment progress is shown in the status bar.
 
 The following fields are added (when available):
 
-IP Geolocation: Country, Region, City, ISP, Latitude, Longitude
+| Enricher | Fields Added |
+|----------|--------------|
+| IP Geolocation | Country, Region, City, ISP, Latitude, Longitude |
+| VirusTotal | Malicious count, Suspicious count, Total scans |
+| AbuseIPDB | Confidence score, Abuse reports, Last report date |
 
-VirusTotal: Malicious count, Suspicious count, Total scans
+### Risk Scoring & Prioritization
 
-AbuseIPDB: Confidence score, Abuse reports, Last report date
+The risk score is calculated automatically using configurable weights (defined in `utils/risk_scorer.py`). Alerts are color‑coded:
 
-Risk Scoring & Prioritization
-The risk score is calculated automatically using configurable weights (defined in utils/risk_scorer.py). Alerts are color‑coded:
+| Color | Score Range |
+|-------|-------------|
+| 🔴 Critical | ≥ 75 |
+| 🟠 High | 50 – 74 |
+| 🟡 Medium | 25 – 49 |
+| 🟢 Low | 0 – 24 |
 
-🔴 Critical (score ≥ 75)
+### Generating Reports
 
-🟠 High (score 50‑74)
+- Click **Export Report** to generate a PDF report of the currently selected alert(s). The report includes raw log, enrichment results, analyst notes, and risk score.
+- Use **File → Export as CSV/JSON** to save the enriched alert list for external analysis.
 
-🟡 Medium (score 25‑49)
+---
 
-🟢 Low (score 0‑24)
+## Project Structure
 
-Generating Reports
-Click Export Report to generate a PDF report of the currently selected alert(s). The report includes raw log, enrichment results, analyst notes, and risk score.
-
-Use File → Export as CSV/JSON to save the enriched alert list for external analysis.
-
-Project Structure
-text
+```
 soc_triage_tool/
 ├── main.py                  # Application entry point
 ├── gui/
@@ -213,31 +228,34 @@ soc_triage_tool/
 ├── config.ini               # Your local configuration (NOT committed)
 ├── config.ini.example       # Template without real API keys
 └── README.md
-Contributing
+```
+
+---
+
+## Contributing
+
 Contributions are welcome! If you'd like to add a new enrichment module, improve the GUI, or fix a bug:
 
-Fork the repository.
-
-Create a feature branch (git checkout -b feature/my-new-enricher).
-
-Commit your changes with clear messages.
-
-Push to your fork (git push origin feature/my-new-enricher).
-
-Open a pull request against the main branch.
+1. **Fork** the repository.
+2. **Create a feature branch** (`git checkout -b feature/my-new-enricher`).
+3. **Commit your changes** with clear messages.
+4. **Push to your fork** (`git push origin feature/my-new-enricher`).
+5. **Open a pull request** against the `main` branch.
 
 Please ensure your code follows the existing style and includes docstrings.
 
-License
-This project is licensed under the MIT License. See the LICENSE file for details.
+---
 
-Acknowledgments
-ttkbootstrap – modern themed widgets for Tkinter
+## License
 
-ip-api.com – free IP geolocation service
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-VirusTotal – file and IP reputation analysis
+---
 
-AbuseIPDB – IP address threat intelligence
+## Acknowledgments
 
-TryHackMe SOC Level 1 – the foundational knowledge that inspired this project
+- [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap) – modern themed widgets for Tkinter
+- [ip-api.com](https://ip-api.com/) – free IP geolocation service
+- [VirusTotal](https://www.virustotal.com/) – file and IP reputation analysis
+- [AbuseIPDB](https://www.abuseipdb.com/) – IP address threat intelligence
+- [TryHackMe SOC Level 1](https://tryhackme.com/) – the foundational knowledge that inspired this project
